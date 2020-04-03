@@ -41,14 +41,18 @@ def display_transform():
 class TrainDatasetFromFolder(Dataset):
     def __init__(self, dataset_dir, crop_size, upscale_factor):
         super(TrainDatasetFromFolder, self).__init__()
-        self.image_filenames = [join(dataset_dir, x) for x in listdir(dataset_dir) if is_image_file(x)]
+        self.image_filenames = [join(dataset_dir, x) for x in listdir(dataset_dir) if is_image_file(x) and not x.endswith("-lo.png")]
         crop_size = calculate_valid_crop_size(crop_size, upscale_factor)
         self.hr_transform = train_hr_transform(crop_size)
         self.lr_transform = train_lr_transform(crop_size, upscale_factor)
 
     def __getitem__(self, index):
-        hr_image = self.hr_transform(Image.open(self.image_filenames[index]))
-        lr_image = self.lr_transform(hr_image)
+        hr_image = self.hr_transform(Image.open(self.image_filenames[index]).convert('RGB'))
+        if self.image_filenames[index].endswith('-hi.png'):
+            # use the HR transform: this image is prescaled
+            lr_image = self.hr_transform(Image.open(self.image_filenames[index].replace('-hi.png', '-lo.png')).convert('RGB'))
+        else:
+            lr_image = self.lr_transform(hr_image)
         return lr_image, hr_image
 
     def __len__(self):
@@ -59,17 +63,22 @@ class ValDatasetFromFolder(Dataset):
     def __init__(self, dataset_dir, upscale_factor):
         super(ValDatasetFromFolder, self).__init__()
         self.upscale_factor = upscale_factor
-        self.image_filenames = [join(dataset_dir, x) for x in listdir(dataset_dir) if is_image_file(x)]
+        self.image_filenames = [join(dataset_dir, x) for x in listdir(dataset_dir) if is_image_file(x) and not x.endswith("-lo.png")]
 
     def __getitem__(self, index):
-        hr_image = Image.open(self.image_filenames[index])
+        hr_image = Image.open(self.image_filenames[index]).convert('RGB')
         w, h = hr_image.size
         crop_size = calculate_valid_crop_size(min(w, h), self.upscale_factor)
         lr_scale = Resize(crop_size // self.upscale_factor, interpolation=Image.BICUBIC)
         hr_scale = Resize(crop_size, interpolation=Image.BICUBIC)
         hr_image = CenterCrop(crop_size)(hr_image)
-        lr_image = lr_scale(hr_image)
-        hr_restore_img = hr_scale(lr_image)
+        if self.image_filenames[index].endswith("-hi.png"):
+            lr_image = Image.open(self.image_filenames[index].replace('-hi.png', '-lo.png')).convert('RGB')
+            hr_restore_img = CenterCrop(crop_size)(lr_image)
+            lr_image = lr_scale(hr_restore_img)
+        else:
+            lr_image = lr_scale(hr_image)
+            hr_restore_img = hr_scale(lr_image)
         return ToTensor()(lr_image), ToTensor()(hr_restore_img), ToTensor()(hr_image)
 
     def __len__(self):
@@ -87,9 +96,9 @@ class TestDatasetFromFolder(Dataset):
 
     def __getitem__(self, index):
         image_name = self.lr_filenames[index].split('/')[-1]
-        lr_image = Image.open(self.lr_filenames[index])
+        lr_image = Image.open(self.lr_filenames[index]).convert('RGB')
         w, h = lr_image.size
-        hr_image = Image.open(self.hr_filenames[index])
+        hr_image = Image.open(self.hr_filenames[index]).convert('RGB')
         hr_scale = Resize((self.upscale_factor * h, self.upscale_factor * w), interpolation=Image.BICUBIC)
         hr_restore_img = hr_scale(lr_image)
         return image_name, ToTensor()(lr_image), ToTensor()(hr_restore_img), ToTensor()(hr_image)
