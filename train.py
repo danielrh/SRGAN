@@ -20,7 +20,8 @@ parser.add_argument('--crop_size', default=88, type=int, help='training images c
 parser.add_argument('--upscale_factor', default=4, type=int, choices=[2, 4, 8],
                     help='super resolution upscale factor')
 parser.add_argument('--num_epochs', default=100, type=int, help='train epoch number')
-
+parser.add_argument('--resume', default=0, type=int, help='where to start')
+parser.add_argument('--advance_upscale_at_epoch', default=100, type=int, help='where to start using hand-drawn upscale')
 
 if __name__ == '__main__':
     opt = parser.parse_args()
@@ -28,8 +29,8 @@ if __name__ == '__main__':
     CROP_SIZE = opt.crop_size
     UPSCALE_FACTOR = opt.upscale_factor
     NUM_EPOCHS = opt.num_epochs
-    
-    train_set = TrainDatasetFromFolder('data/DIV2K_train_HR', crop_size=CROP_SIZE, upscale_factor=UPSCALE_FACTOR)
+    cur_epoch = [opt.resume + 1]
+    train_set = TrainDatasetFromFolder('data/DIV2K_train_HR', crop_size=CROP_SIZE, upscale_factor=UPSCALE_FACTOR, cur_epoch=cur_epoch, advance_upscale_at_epoch=opt.advance_upscale_at_epoch)
     val_set = ValDatasetFromFolder('data/DIV2K_valid_HR', upscale_factor=UPSCALE_FACTOR)
     train_loader = DataLoader(dataset=train_set, num_workers=4, batch_size=64, shuffle=True)
     val_loader = DataLoader(dataset=val_set, num_workers=4, batch_size=1, shuffle=False)
@@ -50,8 +51,15 @@ if __name__ == '__main__':
     optimizerD = optim.Adam(netD.parameters())
     
     results = {'d_loss': [], 'g_loss': [], 'd_score': [], 'g_score': [], 'psnr': [], 'ssim': []}
-    
-    for epoch in range(1, NUM_EPOCHS + 1):
+    if opt.resume != 0:
+        netG.load_state_dict(torch.load('epochs/netG_epoch_%d_%d.pth' % (UPSCALE_FACTOR, opt.resume)))
+        netD.load_state_dict(torch.load('epochs/netD_epoch_%d_%d.pth' % (UPSCALE_FACTOR, opt.resume)))
+        optimizerG.load_state_dict(torch.load('epochs/optimizerG_epoch_%d_%d.pth' % (UPSCALE_FACTOR, opt.resume)))
+        optimizerD.load_state_dict(torch.load('epochs/optimizerD_epoch_%d_%d.pth' % (UPSCALE_FACTOR, opt.resume)))
+        netG.eval()
+        netD.eval()
+    for epoch in range(opt.resume + 1, NUM_EPOCHS + 1):
+        cur_epoch[0] = epoch
         train_bar = tqdm(train_loader)
         running_results = {'batch_sizes': 0, 'd_loss': 0, 'g_loss': 0, 'd_score': 0, 'g_score': 0}
     
@@ -149,6 +157,8 @@ if __name__ == '__main__':
         # save model parameters
         torch.save(netG.state_dict(), 'epochs/netG_epoch_%d_%d.pth' % (UPSCALE_FACTOR, epoch))
         torch.save(netD.state_dict(), 'epochs/netD_epoch_%d_%d.pth' % (UPSCALE_FACTOR, epoch))
+        torch.save(optimizerG.state_dict(), 'epochs/optimizerG_epoch_%d_%d.pth' % (UPSCALE_FACTOR, epoch))
+        torch.save(optimizerD.state_dict(), 'epochs/optimizerD_epoch_%d_%d.pth' % (UPSCALE_FACTOR, epoch))
         # save loss\scores\psnr\ssim
         results['d_loss'].append(running_results['d_loss'] / running_results['batch_sizes'])
         results['g_loss'].append(running_results['g_loss'] / running_results['batch_sizes'])

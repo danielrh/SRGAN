@@ -1,10 +1,10 @@
-from os import listdir
+from os import listdir, path
 from os.path import join
-
+import random
 from PIL import Image
 from torch.utils.data.dataset import Dataset
 from torchvision.transforms import Compose, RandomCrop, ToTensor, ToPILImage, CenterCrop, Resize
-
+import torchvision.transforms.functional as TF
 
 def is_image_file(filename):
     return any(filename.endswith(extension) for extension in ['.png', '.jpg', '.jpeg', '.PNG', '.JPG', '.JPEG'])
@@ -32,27 +32,48 @@ def train_lr_transform(crop_size, upscale_factor):
 def display_transform():
     return Compose([
         ToPILImage(),
-        Resize(400),
-        CenterCrop(400),
+        CenterCrop(488),
         ToTensor()
     ])
 
 
 class TrainDatasetFromFolder(Dataset):
-    def __init__(self, dataset_dir, crop_size, upscale_factor):
+    def __init__(
+            self,
+            dataset_dir,
+            crop_size,
+            upscale_factor,
+            cur_epoch,
+            advance_upscale_at_epoch,
+    ):
         super(TrainDatasetFromFolder, self).__init__()
-        self.image_filenames = [join(dataset_dir, x) for x in listdir(dataset_dir) if is_image_file(x) and not x.endswith("-lo.png")]
-        crop_size = calculate_valid_crop_size(crop_size, upscale_factor)
-        self.hr_transform = train_hr_transform(crop_size)
-        self.lr_transform = train_lr_transform(crop_size, upscale_factor)
+        self.image_filenames = [join(dataset_dir, x) for x in listdir(dataset_dir) if is_image_file(x) and not x.endswith("-lo.png") and not x.endswith("-md.png")]
+        self.upscale_factor = upscale_factor
+        self.cur_epoch = cur_epoch
+        self.crop_size = calculate_valid_crop_size(crop_size, upscale_factor)
+        self.hr_transform = train_hr_transform(self.crop_size)
+        self.lr_transform = train_lr_transform(self.crop_size, upscale_factor)
+        self.advance_upscale_at_epoch = advance_upscale_at_epoch
 
     def __getitem__(self, index):
-        hr_image = self.hr_transform(Image.open(self.image_filenames[index]).convert('RGB'))
-        if self.image_filenames[index].endswith('-hi.png'):
-            # use the HR transform: this image is prescaled
-            lr_image = self.hr_transform(Image.open(self.image_filenames[index].replace('-hi.png', '-lo.png')).convert('RGB'))
+        hr_precrop = Image.open(self.image_filenames[index]).convert('RGB')
+        if self.image_filenames[index].endswith('-hi.png'):# and self.cur_epoch[0] >= self.advance_upscale_at_epoch:
+            lr_precrop = Image.open(self.image_filenames[index].replace('-hi.png', '-lo.png')).convert('RGB')
         else:
-            lr_image = self.lr_transform(hr_image)
+            lr_precrop = Resize(tuple(x//self.upscale_factor for x in hr_precrop.size), interpolation=Image.BICUBIC)(hr_precrop)
+        crop_indices = RandomCrop.get_params(
+                lr_precrop, output_size=(self.crop_size // self.upscale_factor, self.crop_size//self.upscale_factor))
+        hr_crop_indices = (crop_indices[0] * self.upscale_factor,
+                           crop_indices[1] * self.upscale_factor,
+                           crop_indices[2] * self.upscale_factor,
+                           crop_indices[3] * self.upscale_factor)
+        hr_cropped = TF.crop(hr_precrop, hr_crop_indices[0],hr_crop_indices[1],hr_crop_indices[2],hr_crop_indices[3])
+        lr_cropped = TF.crop(lr_precrop, crop_indices[0],crop_indices[1],crop_indices[2],crop_indices[3])
+        
+        #hr_cropped.save("/tmp/hr" + str(hr_crop_indices[0])+"."+str(hr_crop_indices[1])+"."+str(hr_crop_indices[2])+"." + str(hr_crop_indices[3])+"."+path.basename(self.image_filenames[index]).replace(" ", "-"), "PNG")
+        #lr_cropped.save("/tmp/lr" + str(crop_indices[0])+"."+str(crop_indices[1])+"."+str(crop_indices[2])+"." + str(crop_indices[3])+"."+ path.basename(self.image_filenames[index]).replace(" ", "-"), "PNG")
+        hr_image = ToTensor()(hr_cropped)
+        lr_image = ToTensor()(lr_cropped)
         return lr_image, hr_image
 
     def __len__(self):
@@ -63,7 +84,7 @@ class ValDatasetFromFolder(Dataset):
     def __init__(self, dataset_dir, upscale_factor):
         super(ValDatasetFromFolder, self).__init__()
         self.upscale_factor = upscale_factor
-        self.image_filenames = [join(dataset_dir, x) for x in listdir(dataset_dir) if is_image_file(x) and not x.endswith("-lo.png")]
+        self.image_filenames = [join(dataset_dir, x) for x in listdir(dataset_dir) if is_image_file(x) and not x.endswith("-lo.png") and not x.endswith("-md.png")]
 
     def __getitem__(self, index):
         hr_image = Image.open(self.image_filenames[index]).convert('RGB')
@@ -74,8 +95,7 @@ class ValDatasetFromFolder(Dataset):
         hr_image = CenterCrop(crop_size)(hr_image)
         if self.image_filenames[index].endswith("-hi.png"):
             lr_image = Image.open(self.image_filenames[index].replace('-hi.png', '-lo.png')).convert('RGB')
-            hr_restore_img = CenterCrop(crop_size)(lr_image)
-            lr_image = lr_scale(hr_restore_img)
+            hr_restore_img = hr_scale(lr_image)
         else:
             lr_image = lr_scale(hr_image)
             hr_restore_img = hr_scale(lr_image)
