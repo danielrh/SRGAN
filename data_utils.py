@@ -101,7 +101,7 @@ class ValDatasetFromFolder(Dataset):
         hr_scale = Resize(crop_size, interpolation=Image.BICUBIC)
         hr_image = CenterCrop(crop_size)(hr_image)
         if self.image_filenames[index].endswith("-hi.png") or self.image_filenames[index].endswith('-hs.png'):
-            lr_image = Image.open(replace_hi_lo(self.image_filenames[index])).convert('RGB')
+            lr_image = CenterCrop(crop_size // self.upscale_factor)(Image.open(replace_hi_lo(self.image_filenames[index])).convert('RGB'))
             hr_restore_img = hr_scale(lr_image)
         else:
             lr_image = lr_scale(hr_image)
