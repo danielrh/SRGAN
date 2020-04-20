@@ -21,29 +21,36 @@ fn modify(img: &mut image::DynamicImage,  opt_fill: Option<u32>) -> Result<(), i
         }
     }
     if let Some(fill) = opt_fill {
-        let mut blur = image::DynamicImage::new_luma8(width, height);
+        let mut blur = image::GrayImage::new(width, height);
+        let mut blur2 = image::GrayImage::new(width, height);
         for x in 0..width {
             for y in 0..height {
                 if img.get_pixel(x,y) != image::Rgba([0x00,0x00,0x08,0xff]) {
-                    blur.put_pixel(x,y,image::Rgba([0xff,0xff,0xff,0xff]))
+                    blur.put_pixel(x,y,image::Luma([0xff]))
                 }
             }
         }
-        for index in 0..fill {
-            blur = blur.filter3x3(&[
-                1./16., 0.125, 0.125,
-                0.125,0.125,0.125,
-                0.125,0.125,1./16.,
-            ]);
-            if (index % 7) == 6 {
-                for x in 0..width {
-                    for y in 0..height {
-                        if blur.get_pixel(x,y)[0] != 0 { // reup the color ante; prevent the blur from zeroing it
-                            blur.put_pixel(x,y,image::Rgba([0xff,0xff,0xff,0xff]))
+        for fillind in 0..fill {
+            for x in 1..(width-1) {
+                for y in 1..(height-1) {
+                    let mut any = 0u8;
+                    for (xd,yd) in &[(-1i32,0i32),
+                                    (0i32,0i32),
+                                    (1i32,0i32),
+                                    (0i32,-1i32),
+                                    (0i32,1i32),
+                                    (-1i32+(fillind as i32&1)*2,1i32),
+                                    (1i32-(fillind as i32&1)*2,-1i32),
+                                    ] {
+                        if blur.get_pixel((x as i32 + xd) as u32,(y as i32 + yd) as u32)[0] != 0x0 {
+                            any = 0xff;
+                                break
                         }
                     }
+                    blur2.put_pixel(x,y,image::Luma([any]))
                 }
             }
+            std::mem::swap(&mut blur, &mut blur2);
         }
         let mut bkgimg = img.clone();
         let grid_res = 32;
