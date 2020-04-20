@@ -12,7 +12,8 @@ fn modify(img: &mut image::DynamicImage) -> Result<(), image::ImageError>{
         for y in 0..height {
             let pixel = img.get_pixel(x,y);
             let image::Rgba(data) = pixel;
-            if [data[0], data[1], data[2]] == [0xe7, 0xb2, 0x34] {
+            let rgb = [data[0], data[1], data[2]];
+            if rgb == [0xe7, 0xb2, 0x34] || rgb == [0x3c, 0xff, 0x00] {
                 img.put_pixel(x,y, image::Rgba([0x00,0x00,0x08,0xff]));
             }
         }
@@ -39,7 +40,7 @@ fn process(input_path: &str, opt_crop: Option<Rect>) -> Result<(), image::ImageE
     };
     let path_nox = path.with_extension("");
     if let Some(filename) = path_nox.file_name() {
-        let output_filename = filename.to_string_lossy().into_owned() + "_out";
+        let output_filename = filename.to_string_lossy().into_owned() + "_hi";
         let output_path_nox = path_nox.with_file_name(output_filename);
         let output_path = if let Some(uext) = ext {
             output_path_nox.with_extension(uext)
@@ -48,7 +49,7 @@ fn process(input_path: &str, opt_crop: Option<Rect>) -> Result<(), image::ImageE
         };
         modify(&mut img)?;
         img.save(output_path)?;
-        let output2_filename = filename.to_string_lossy().into_owned() + "_sml";
+        let output2_filename = filename.to_string_lossy().into_owned() + "_lo";
         let output2_path_nox = path_nox.with_file_name(output2_filename);
         let output2_path = if let Some(uext) = ext {
             output2_path_nox.with_extension(uext)

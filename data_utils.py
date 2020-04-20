@@ -77,8 +77,8 @@ class TrainDatasetFromFolder(Dataset):
         hr_cropped = TF.crop(hr_precrop, hr_crop_indices[0],hr_crop_indices[1],hr_crop_indices[2],hr_crop_indices[3])
         lr_cropped = TF.crop(lr_precrop, crop_indices[0],crop_indices[1],crop_indices[2],crop_indices[3])
         
-        #hr_cropped.save("/tmp/hr" + str(hr_crop_indices[0])+"."+str(hr_crop_indices[1])+"."+str(hr_crop_indices[2])+"." + str(hr_crop_indices[3])+"."+path.basename(self.image_filenames[index]).replace(" ", "-"), "PNG")
-        #lr_cropped.save("/tmp/lr" + str(crop_indices[0])+"."+str(crop_indices[1])+"."+str(crop_indices[2])+"." + str(crop_indices[3])+"."+ path.basename(self.image_filenames[index]).replace(" ", "-"), "PNG")
+        #hr_cropped.save("/tmp/tr_hr" + str(hr_crop_indices[0])+"."+str(hr_crop_indices[1])+"."+str(hr_crop_indices[2])+"." + str(hr_crop_indices[3])+"."+path.basename(self.image_filenames[index]).replace(" ", "-"), "PNG")
+        #lr_cropped.save("/tmp/tr_lr" + str(hr_crop_indices[0])+"."+str(crop_indices[1])+"."+str(crop_indices[2])+"." + str(crop_indices[3])+"."+ path.basename(self.image_filenames[index]).replace(" ", "-"), "PNG")
         hr_image = ToTensor()(hr_cropped)
         lr_image = ToTensor()(lr_cropped)
         return lr_image, hr_image
@@ -106,6 +106,9 @@ class ValDatasetFromFolder(Dataset):
         else:
             lr_image = lr_scale(hr_image)
             hr_restore_img = hr_scale(lr_image)
+        #hr_image.save("/tmp/vv_hr."+path.basename(self.image_filenames[index]).replace(" ", "-"), "PNG")
+        #lr_image.save("/tmp/vv_lr."+ path.basename(self.image_filenames[index]).replace(" ", "-"), "PNG")
+        #hr_restore_img.save("/tmp/vv_hrr."+ path.basename(self.image_filenames[index]).replace(" ", "-"), "PNG")
         return ToTensor()(lr_image), ToTensor()(hr_restore_img), ToTensor()(hr_image)
 
     def __len__(self):
@@ -128,6 +131,9 @@ class TestDatasetFromFolder(Dataset):
         hr_image = Image.open(self.hr_filenames[index]).convert('RGB')
         hr_scale = Resize((self.upscale_factor * h, self.upscale_factor * w), interpolation=Image.BICUBIC)
         hr_restore_img = hr_scale(lr_image)
+        #lr_image.save("/tmp/tt_hr" + str(hr_crop_indices[0])+"."+str(hr_crop_indices[1])+"."+str(hr_crop_indices[2])+"." + str(hr_crop_indices[3])+"."+path.basename(self.image_filenames[index]).replace(" ", "-"), "PNG")
+        #hr_image.save("/tmp/tt_lr" + str(crop_indices[0])+"."+str(crop_indices[1])+"."+str(crop_indices[2])+"." + str(crop_indices[3])+"."+ path.basename(self.image_filenames[index]).replace(" ", "-"), "PNG")
+        #hr_restore_image.save("/tmp/tt_hrr" + str(crop_indices[0])+"."+str(crop_indices[1])+"."+str(crop_indices[2])+"." + str(crop_indices[3])+"."+ path.basename(self.image_filenames[index]).replace(" ", "-"), "PNG")
         return image_name, ToTensor()(lr_image), ToTensor()(hr_restore_img), ToTensor()(hr_image)
 
     def __len__(self):
