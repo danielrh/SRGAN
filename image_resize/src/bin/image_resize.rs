@@ -21,28 +21,41 @@ fn modify(img: &mut image::DynamicImage,  opt_fill: Option<u32>) -> Result<(), i
         }
     }
     if let Some(fill) = opt_fill {
-        let mut blur = img.filter3x3(&[
-                1./16., 0.125, 0.125,
-            0.125,0.125,0.125,
-            0.125,0.125,1./16.,
-        ]);
-        for _ in 1..fill {
+        let mut blur = image::DynamicImage::new_luma8(width, height);
+        for x in 0..width {
+            for y in 0..height {
+                if img.get_pixel(x,y) != image::Rgba([0x00,0x00,0x08,0xff]) {
+                    blur.put_pixel(x,y,image::Rgba([0xff,0xff,0xff,0xff]))
+                }
+            }
+        }
+        for index in 0..fill {
             blur = blur.filter3x3(&[
                 1./16., 0.125, 0.125,
                 0.125,0.125,0.125,
                 0.125,0.125,1./16.,
             ]);
+            if (index % 7) == 6 {
+                for x in 0..width {
+                    for y in 0..height {
+                        if blur.get_pixel(x,y)[0] != 0 { // reup the color ante; prevent the blur from zeroing it
+                            blur.put_pixel(x,y,image::Rgba([0xff,0xff,0xff,0xff]))
+                        }
+                    }
+                }
+            }
         }
         let mut bkgimg = img.clone();
-        let grid_res = 16;
-        let num_polygons_wide = (width + grid_res - 1) / grid_res;
-        let mut grid = vec![imageproc::drawing::Point::new(0,0); num_polygons_wide as usize * ((height + grid_res - 1)/grid_res) as usize];
+        let grid_res = 32;
+        let num_polygons_wide = ((width + grid_res - 1) / grid_res) + 1;
+        let mut grid = vec![imageproc::drawing::Point::new(0,0); num_polygons_wide as usize * ((height + grid_res - 1)/grid_res + 1) as usize];
+        let grid_len = grid.len();
         for (index, item) in grid.iter_mut().enumerate() {
             let x_index = index as u32 % num_polygons_wide;
             let y_index = index as u32 / num_polygons_wide;
             let mut x = x_index * grid_res;
             let mut y = y_index * grid_res;
-            if x_index != 0 && y_index != 0 && x_index + 1 != num_polygons_wide && y_index + 1 != num_polygons_wide {
+            if x_index != 0 && y_index != 0 && x_index + 1 != num_polygons_wide && y_index + 1 != (grid_len as u32/num_polygons_wide) {
                 let jitterx = rand::random::<u32>() % grid_res;
                 let jittery = rand::random::<u32>() % grid_res;
                 x -= jitterx;
@@ -51,7 +64,7 @@ fn modify(img: &mut image::DynamicImage,  opt_fill: Option<u32>) -> Result<(), i
             *item = imageproc::drawing::Point::new(x as i32,y as i32);
         }
         for x in 0..(num_polygons_wide as usize - 1) {
-            for y in 0..(grid.len()/num_polygons_wide as usize -1) {
+            for y in 0..(grid_len/num_polygons_wide as usize -1) {
                 let points = [grid[x as usize + y as usize *num_polygons_wide as usize],
                           grid[x + 1 + y*num_polygons_wide as usize],
                           grid[x + (y + 1)*num_polygons_wide as usize],
@@ -73,7 +86,7 @@ fn modify(img: &mut image::DynamicImage,  opt_fill: Option<u32>) -> Result<(), i
         }
         for x in 0..width {
             for y in 0..height {
-                if blur.get_pixel(x,y) == image::Rgba([0x00,0x00,0x08,0xff]) {
+                if blur.get_pixel(x,y)[0] == 0x0 {
                     img.put_pixel(x,y, bkgimg.get_pixel(x,y))
                 }
             }
