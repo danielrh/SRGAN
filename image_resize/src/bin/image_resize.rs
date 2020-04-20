@@ -101,7 +101,7 @@ fn process(input_path: &str, opt_crop: Option<Rect>, opt_fill: Option<u32>) -> R
     };
     let path_nox = path.with_extension("");
     if let Some(filename) = path_nox.file_name() {
-        let output_filename = filename.to_string_lossy().into_owned() + "_hi";
+        let output_filename = filename.to_string_lossy().into_owned() + "-hi";
         let output_path_nox = path_nox.with_file_name(output_filename);
         let output_path = if let Some(uext) = ext {
             output_path_nox.with_extension(uext)
@@ -110,7 +110,7 @@ fn process(input_path: &str, opt_crop: Option<Rect>, opt_fill: Option<u32>) -> R
         };
         modify(&mut img, opt_fill)?;
         img.save(output_path)?;
-        let output2_filename = filename.to_string_lossy().into_owned() + "_lo";
+        let output2_filename = filename.to_string_lossy().into_owned() + "-lo";
         let output2_path_nox = path_nox.with_file_name(output2_filename);
         let output2_path = if let Some(uext) = ext {
             output2_path_nox.with_extension(uext)
