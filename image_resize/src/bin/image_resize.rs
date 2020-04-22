@@ -8,7 +8,8 @@ use std::env;
 use std::path::PathBuf;
 use std::ffi;
 
-fn modify(img: &mut image::DynamicImage,  opt_fill: Option<u32>) -> Result<(), image::ImageError>{
+fn modify(img: &mut image::DynamicImage,  mut opt_fill: Option<u32>, full_picasso_mode: bool,
+) -> Result<(), image::ImageError>{
     let (width, height) = img.dimensions();
     for x in 0..width {
         for y in 0..height {
@@ -20,37 +21,42 @@ fn modify(img: &mut image::DynamicImage,  opt_fill: Option<u32>) -> Result<(), i
             }
         }
     }
+    if full_picasso_mode {
+        opt_fill = Some(width);
+    }
     if let Some(fill) = opt_fill {
         let mut blur = image::GrayImage::new(width, height);
-        let mut blur2 = image::GrayImage::new(width, height);
-        for x in 0..width {
-            for y in 0..height {
-                if img.get_pixel(x,y) != image::Rgba([0x00,0x00,0x08,0xff]) {
-                    blur.put_pixel(x,y,image::Luma([0xff]))
-                }
-            }
-        }
-        for fillind in 0..fill {
-            for x in 1..(width-1) {
-                for y in 1..(height-1) {
-                    let mut any = 0u8;
-                    for (xd,yd) in &[(-1i32,0i32),
-                                    (0i32,0i32),
-                                    (1i32,0i32),
-                                    (0i32,-1i32),
-                                    (0i32,1i32),
-                                    (-1i32+(fillind as i32&1)*2,1i32),
-                                    (1i32-(fillind as i32&1)*2,-1i32),
-                                    ] {
-                        if blur.get_pixel((x as i32 + xd) as u32,(y as i32 + yd) as u32)[0] != 0x0 {
-                            any = 0xff;
-                                break
-                        }
+        if !full_picasso_mode {
+            let mut blur2 = image::GrayImage::new(width, height);
+            for x in 0..width {
+                for y in 0..height {
+                    if img.get_pixel(x,y) != image::Rgba([0x00,0x00,0x08,0xff]) {
+                        blur.put_pixel(x,y,image::Luma([0xff]))
                     }
-                    blur2.put_pixel(x,y,image::Luma([any]))
                 }
             }
-            std::mem::swap(&mut blur, &mut blur2);
+            for fillind in 0..fill {
+                for x in 1..(width-1) {
+                    for y in 1..(height-1) {
+                        let mut any = 0u8;
+                        for (xd,yd) in &[(-1i32,0i32),
+                                         (0i32,0i32),
+                                         (1i32,0i32),
+                                         (0i32,-1i32),
+                                         (0i32,1i32),
+                                         (-1i32+(fillind as i32&1)*2,1i32),
+                                         (1i32-(fillind as i32&1)*2,-1i32),
+                        ] {
+                            if blur.get_pixel((x as i32 + xd) as u32,(y as i32 + yd) as u32)[0] != 0x0 {
+                                any = 0xff;
+                                break
+                            }
+                        }
+                        blur2.put_pixel(x,y,image::Luma([any]))
+                    }
+                }
+                std::mem::swap(&mut blur, &mut blur2);
+            }
         }
         let mut bkgimg = img.clone();
         let grid_res = 32;
@@ -108,7 +114,8 @@ fn shrink_nearest(img: &image::DynamicImage) -> Result<image::RgbaImage, image::
     });
     Ok(small_img)
 }
-fn process(input_path: &str, opt_crop: Option<Rect>, opt_fill: Option<u32>) -> Result<(), image::ImageError>{
+fn process(input_path: &str, opt_crop: Option<Rect>, opt_fill: Option<u32>,
+           full_picasso_mode:bool) -> Result<(), image::ImageError>{
     let path = PathBuf::from(input_path.clone());
     let mut img = image::open(input_path)?;
     if let Some(crop) = opt_crop {
@@ -128,7 +135,7 @@ fn process(input_path: &str, opt_crop: Option<Rect>, opt_fill: Option<u32>) -> R
         } else {
             output_path_nox
         };
-        modify(&mut img, opt_fill)?;
+        modify(&mut img, opt_fill, full_picasso_mode)?;
         img.save(output_path)?;
         let output2_filename = filename.to_string_lossy().into_owned() + "-lo";
         let output2_path_nox = path_nox.with_file_name(output2_filename);
@@ -175,10 +182,12 @@ fn main() {
     opts.optopt("t", "croph", "set  crop height/tallness", "0");
     opts.optopt("f", "fill", "set blackened areas to colors: specify num pixels", "");
     opts.optflag("h", "help", "print help");
+    opts.optflag("p", "picasso", "ignore the input: only display random colored triangles");
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => {m}
         Err(f)  => { panic!(f.to_string())}
     };
+    let full_picasso_mode = matches.opt_present("picasso");
     if matches.opt_present("h") {
         print!("{}", opts.usage(&""));
         return;
@@ -191,6 +200,6 @@ fn main() {
     );
     let fill = matches.opt_get::<u32>("fill").unwrap();
     for argument in matches.free {
-        process(&argument, crop.clone(), fill).unwrap();
+        process(&argument, crop.clone(), fill, full_picasso_mode).unwrap();
     }
 }

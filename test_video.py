@@ -1,5 +1,5 @@
 import argparse
-
+import os
 import cv2
 import numpy as np
 import torch
@@ -13,21 +13,21 @@ from model import Generator
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Test Single Video')
-    parser.add_argument('--upscale_factor', default=4, type=int, help='super resolution upscale factor')
+    parser.add_argument('--upscale_factor', default=2, type=int, help='super resolution upscale factor')
     parser.add_argument('--video_name', type=str, help='test low resolution video name')
-    parser.add_argument('--model_name', default='netG_epoch_4_100.pth', type=str, help='generator model epoch name')
+    parser.add_argument('--model_name', default='epochs/netG_epoch_2_166.pth', type=str, help='generator model epoch name')
     opt = parser.parse_args()
 
     UPSCALE_FACTOR = opt.upscale_factor
     VIDEO_NAME = opt.video_name
     MODEL_NAME = opt.model_name
-
+    model_prefix = MODEL_NAME[:MODEL_NAME.rfind('.')].replace("/", "_")
     model = Generator(UPSCALE_FACTOR).eval()
     if torch.cuda.is_available():
         model = model.cuda()
     # for cpu
     # model.load_state_dict(torch.load('epochs/' + MODEL_NAME, map_location=lambda storage, loc: storage))
-    model.load_state_dict(torch.load('epochs/' + MODEL_NAME))
+    model.load_state_dict(torch.load(MODEL_NAME))
 
     videoCapture = cv2.VideoCapture(VIDEO_NAME)
     fps = videoCapture.get(cv2.CAP_PROP_FPS)
@@ -40,8 +40,10 @@ if __name__ == "__main__":
                                    10 * int(int(
                                        videoCapture.get(cv2.CAP_PROP_FRAME_WIDTH) * UPSCALE_FACTOR) // 5 + 1)) * int(
                                    int(videoCapture.get(cv2.CAP_PROP_FRAME_WIDTH) * UPSCALE_FACTOR) // 5 - 9)))
-    output_sr_name = 'out_srf_' + str(UPSCALE_FACTOR) + '_' + VIDEO_NAME.split('.')[0] + '.avi'
-    output_compared_name = 'compare_srf_' + str(UPSCALE_FACTOR) + '_' + VIDEO_NAME.split('.')[0] + '.avi'
+    
+    output_sr_name = model_prefix + '/out_srf' + VIDEO_NAME.split('.')[0] + '.avi'
+    output_compared_name = model_prefix + '/compare_srf' + VIDEO_NAME[:VIDEO_NAME.rfind('.')] + '.avi'
+    print("WRITING TO " + output_sr_name+ " AND "+ output_compared_name)
     sr_video_writer = cv2.VideoWriter(output_sr_name, cv2.VideoWriter_fourcc('M', 'P', 'E', 'G'), fps, sr_video_size)
     compared_video_writer = cv2.VideoWriter(output_compared_name, cv2.VideoWriter_fourcc('M', 'P', 'E', 'G'), fps,
                                             compared_video_size)
