@@ -63,11 +63,13 @@ class TrainDatasetFromFolder(Dataset):
         self.advance_upscale_at_epoch = advance_upscale_at_epoch
 
     def __getitem__(self, index):
-        hr_precrop = Image.open(self.image_filenames[index]).convert('RGB')
         if (self.image_filenames[index].endswith('-hi.png') and self.cur_epoch[0] >= self.advance_upscale_at_epoch) or self.image_filenames[index].endswith('-hs.png'):
+            hr_precrop = Image.open(self.image_filenames[index]).convert('RGB')
             lr_precrop = Image.open(replace_hi_lo(self.image_filenames[index])).convert('RGB')
         else:
-            lr_precrop = Resize(tuple(x//self.upscale_factor for x in hr_precrop.size), interpolation=Image.BICUBIC)(hr_precrop)
+            hr_image = self.hr_transform(Image.open(self.image_filenames[index]))
+            lr_image = self.lr_transform(hr_image)
+            return lr_image, hr_image
         crop_indices = RandomCrop.get_params(
                 lr_precrop, output_size=(self.crop_size // self.upscale_factor, self.crop_size//self.upscale_factor))
         hr_crop_indices = (crop_indices[0] * self.upscale_factor,
